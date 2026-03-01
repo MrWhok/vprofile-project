@@ -84,7 +84,7 @@
                     <!-- Username field -->
                     <div class="wrap-input100 validate-input m-b-23" data-validate="Username is required">
                         <span class="label-input100">Username</span>
-                        <form:input path="username" class="input100" placeholder="Type your username"/>
+                        <form:input path="username" class="input100" placeholder="Type your username TESTTTTTT"/>
                         <form:errors path="username" cssClass="error"/>
                         <span class="focus-input100" data-symbol="&#xf206;"></span>
                     </div>
