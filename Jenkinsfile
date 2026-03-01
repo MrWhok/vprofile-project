@@ -102,7 +102,7 @@ pipeline{
             steps {
                 script {
                     // This builds the image using the multistage Dockerfile in your repo
-                    dockerImage = docker.build("${DOCKER_IMAGE}:${BUILD_NUMBER}", "./Docker-files/app/multistage/")
+                    dockerImage = docker.build("${DOCKER_IMAGE}:${BUILD_NUMBER}", "-f ./Docker-files/app/multistage/Dockerfile .")
                 }
             }
         }
