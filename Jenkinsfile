@@ -1,121 +1,147 @@
-pipeline {
-    
-	agent any
-/*	
-	tools {
-        maven "maven3"
+def COLOR_MAP = [
+    'SUCCESS': '00FF00', 
+    'FAILURE': 'FF0000',
+    'UNSTABLE': 'FFFF00'
+]
+pipeline{
+    agent any
+
+    triggers {
+        githubPush()
     }
-*/	
+
+    tools {
+        jdk 'JDK17' 
+        maven 'MAVEN3.9' 
+    }
+
     environment {
-        NEXUS_VERSION = "nexus3"
-        NEXUS_PROTOCOL = "http"
-        NEXUS_URL = "172.31.40.209:8081"
-        NEXUS_REPOSITORY = "vprofile-release"
-	NEXUS_REPO_ID    = "vprofile-release"
-        NEXUS_CREDENTIAL_ID = "nexuslogin"
-        ARTVERSION = "${env.BUILD_ID}"
+        // Replace 'your-dockerhub-user' with your actual Docker Hub username
+        DOCKER_USER = 'aydin3008'
+        DOCKER_REPO = 'vprofileapp'
+        DOCKER_IMAGE = "${DOCKER_USER}/${DOCKER_REPO}"
+        // This must match the ID you created in Step 1
+        DOCKER_CREDS_ID = 'dockertoken'
     }
-	
+
     stages{
-        
-        stage('BUILD'){
+        stage('Fetch Code'){
             steps {
-                sh 'mvn clean install -DskipTests'
+                echo 'Fetching code...'
+                checkout scm 
+            }        }
+        stage('Build'){
+            steps{
+                echo 'Building...'
+                sh 'mvn install -DskipTests'
             }
             post {
                 success {
-                    echo 'Now Archiving...'
-                    archiveArtifacts artifacts: '**/target/*.war'
+                    echo 'Build successful!'
+                    echo 'Archiving artifacts...'
+                    archiveArtifacts artifacts: '**/*.war'
                 }
             }
         }
-
-	stage('UNIT TEST'){
-            steps {
+        stage('Unit Test'){
+            steps{
+                echo 'Testing...'
                 sh 'mvn test'
             }
         }
-
-	stage('INTEGRATION TEST'){
-            steps {
-                sh 'mvn verify -DskipUnitTests'
-            }
-        }
-		
-        stage ('CODE ANALYSIS WITH CHECKSTYLE'){
-            steps {
+        stage('Checkstyle'){
+            steps{
+                echo 'Testing...'
                 sh 'mvn checkstyle:checkstyle'
             }
-            post {
-                success {
-                    echo 'Generated Analysis Result'
-                }
-            }
         }
-
-        stage('CODE ANALYSIS with SONARQUBE') {
-          
-		  environment {
-             scannerHome = tool 'sonarscanner4'
-          }
-
-          steps {
-            withSonarQubeEnv('sonar-pro') {
-               sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=vprofile \
-                   -Dsonar.projectName=vprofile-repo \
+        stage("Sonar Code Analysis") {
+        	environment {
+                scannerHome = tool 'sonar6.2'
+            }
+            steps {
+              withSonarQubeEnv('sonarserver') {
+                sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=vprofile \
+                   -Dsonar.projectName=vprofile \
                    -Dsonar.projectVersion=1.0 \
                    -Dsonar.sources=src/ \
                    -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
                    -Dsonar.junit.reportsPath=target/surefire-reports/ \
                    -Dsonar.jacoco.reportsPath=target/jacoco.exec \
                    -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml'''
+              }
             }
-
-            timeout(time: 10, unit: 'MINUTES') {
-               waitForQualityGate abortPipeline: true
-            }
-          }
         }
-
-        stage("Publish to Nexus Repository Manager") {
+        stage("Quality Gate") {
+            steps {
+              timeout(time: 1, unit: 'HOURS') {
+                waitForQualityGate abortPipeline: true
+              }
+            }
+        }
+        // stage("UploadArtifacttoNexus") {
+        //     steps{
+        //         nexusArtifactUploader(
+        //           nexusVersion: 'nexus3',
+        //           protocol: 'http',
+        //           nexusUrl: 'nexus:8081',
+        //           groupId: 'QA',
+        //           version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}",
+        //           repository: 'vprofile-repo',
+        //           credentialsId: 'nexuslogin',
+        //           artifacts: [
+        //             [artifactId: 'vproapp',
+        //              classifier: '',
+        //              file: 'target/vprofile-v2.war',
+        //              type: 'war']
+        //           ]
+        //         )
+        //     }
+        // }
+        stage('Build Docker Image') {
             steps {
                 script {
-                    pom = readMavenPom file: "pom.xml";
-                    filesByGlob = findFiles(glob: "target/*.${pom.packaging}");
-                    echo "${filesByGlob[0].name} ${filesByGlob[0].path} ${filesByGlob[0].directory} ${filesByGlob[0].length} ${filesByGlob[0].lastModified}"
-                    artifactPath = filesByGlob[0].path;
-                    artifactExists = fileExists artifactPath;
-                    if(artifactExists) {
-                        echo "*** File: ${artifactPath}, group: ${pom.groupId}, packaging: ${pom.packaging}, version ${pom.version} ARTVERSION";
-                        nexusArtifactUploader(
-                            nexusVersion: NEXUS_VERSION,
-                            protocol: NEXUS_PROTOCOL,
-                            nexusUrl: NEXUS_URL,
-                            groupId: pom.groupId,
-                            version: ARTVERSION,
-                            repository: NEXUS_REPOSITORY,
-                            credentialsId: NEXUS_CREDENTIAL_ID,
-                            artifacts: [
-                                [artifactId: pom.artifactId,
-                                classifier: '',
-                                file: artifactPath,
-                                type: pom.packaging],
-                                [artifactId: pom.artifactId,
-                                classifier: '',
-                                file: "pom.xml",
-                                type: "pom"]
-                            ]
-                        );
-                    } 
-		    else {
-                        error "*** File: ${artifactPath}, could not be found";
+                    // This builds the image using the multistage Dockerfile in your repo
+                    dockerImage = docker.build("${DOCKER_IMAGE}:${BUILD_NUMBER}", "./Docker-files/app/multistage/")
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    // Jenkins handles the 'docker login' automatically using these credentials
+                    docker.withRegistry('', DOCKER_CREDS_ID) {
+                        dockerImage.push("${BUILD_NUMBER}")
+                        dockerImage.push('latest')
                     }
                 }
             }
         }
 
-
+        stage('Deploy to Local Docker') {
+            steps {
+                script {
+                sh "docker pull ${DOCKER_IMAGE}:latest" 
+                sh "docker rm -f vprofile-app || true"
+                sh "docker run -d --name vprofile-app -p 8082:8080 ${DOCKER_IMAGE}:latest"                
+                }
+            }
+        }
     }
-
-
+    post {
+            always {
+                echo 'Discord Notifications.'
+                discordSend description: "Job: ${env.JOB_NAME} \nBuild: ${env.BUILD_NUMBER} \nMore info at: ${env.BUILD_URL}",
+                            footer: "Jenkins DevSecOps Lab",
+                            link: env.BUILD_URL,
+                            result: currentBuild.currentResult,
+                            title: "Build Result: ${currentBuild.currentResult}",
+                            webhookURL: "https://discord.com/api/webhooks/1477522408641662988/PeqCcObvfYx7d571HD-vdFYJ8cqcpkwvzW-dA4nG8kP_L-8BAS4f4kUnKQyZdKWTzFh7"
+            }
+            cleanup {
+                sh "docker rmi ${DOCKER_IMAGE}:${BUILD_NUMBER} ${DOCKER_IMAGE}:latest || true"
+            }
+        }
 }
+   
