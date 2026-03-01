@@ -75,7 +75,7 @@
 
                     <!-- Email field -->
                     <div class="wrap-input100 validate-input m-b-23" data-validate="Email is required">
-                        <span class="label-input100">Email ID</span>
+                        <span class="label-input100">Email IDDDDDDDDDDDDDDDDDDD</span>
                         <form:input path="userEmail" class="input100" placeholder="Type your email id"/>
                         <form:errors path="userEmail" cssClass="error"/>
                         <span class="focus-input100" data-symbol="&#xf206;"></span>
