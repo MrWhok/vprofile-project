@@ -1,12 +1,14 @@
-FROM maven:3.9.9-eclipse-temurin-21-jammy AS BUILD_IMAGE
-RUN git clone https://github.com/hkhcoder/vprofile-project.git
-RUN cd vprofile-project && git checkout docker && mvn install
+# Use a Tomcat version compatible with your JDK 17 Jenkins environment
+FROM tomcat:9-jdk17-temurin-jammy
 
-FROM tomcat:10-jdk21
-
+# Clean up default Tomcat applications to avoid conflicts
 RUN rm -rf /usr/local/tomcat/webapps/*
 
-COPY --from=BUILD_IMAGE vprofile-project/target/vprofile-v2.war /usr/local/tomcat/webapps/ROOT.war
+# CRITICAL FIX: Copy the .war file that Jenkins just built.
+# Your Jenkinsfile 'Build' stage creates this in the 'target' folder.
+# This ensures your 'TESTTTTTT' changes are included in the image.
+COPY target/vprofile-v2.war /usr/local/tomcat/webapps/ROOT.war
 
 EXPOSE 8080
+
 CMD ["catalina.sh", "run"]
